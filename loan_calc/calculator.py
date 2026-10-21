@@ -1,6 +1,14 @@
 import math
 from datetime import date
 
+from .exceptions import (
+    IncomeValidationError,
+    InstalmentValidationError,
+    PrincipalValidationError,
+    RateValidationError,
+    TenureValidationError,
+)
+
 
 DEFAULT_CURRENCY = "INR"
 
@@ -12,9 +20,11 @@ def _monthly_rate(annual_rate):
 
 def emi(principal, annual_rate, tenure_months):
     if tenure_months <= 0:
-        raise ValueError("tenure must be positive")
+        raise TenureValidationError("tenure must be positive")
     if principal <= 0:
-        raise ValueError("principal must be positive")
+        raise PrincipalValidationError("principal must be positive")
+    if annual_rate < 0:
+        raise RateValidationError("annual_rate cannot be negative")
     r = _monthly_rate(annual_rate)
     if r == 0:
         return round(principal / tenure_months, 2)
@@ -66,18 +76,28 @@ def outstanding_after(principal, annual_rate, tenure_months, months_paid):
 
 def remaining_tenure(balance, annual_rate, instalment):
     r = _monthly_rate(annual_rate)
-    if balance <= 0:
+    if balance < 0:
+        raise PrincipalValidationError("balance cannot be negative")
+    if balance == 0:
         return 0
+    if annual_rate < 0:
+        raise RateValidationError("annual_rate cannot be negative")
+    if instalment <= 0:
+        raise InstalmentValidationError("instalment must be positive")
     if r == 0:
         return math.ceil(balance / instalment)
     if instalment <= balance * r:
-        raise ValueError("instalment too small to repay the loan")
+        raise InstalmentValidationError("instalment too small to repay the loan")
     n = -math.log(1 - balance * r / instalment) / math.log(1 + r)
     return math.ceil(n)
 
 
 def prepayment_savings(principal, annual_rate, tenure_months, prepay_month, prepay_amount):
     """Keep the same EMI after a lump-sum prepayment and shorten the tenure."""
+    if prepay_month <= 0 or prepay_month > tenure_months:
+        raise TenureValidationError("prepay_month must be within loan tenure")
+    if prepay_amount < 0:
+        raise PrincipalValidationError("prepay_amount cannot be negative")
     instalment = emi(principal, annual_rate, tenure_months)
     sched = amortisation_schedule(principal, annual_rate, tenure_months)
     balance = sched[prepay_month - 1]["balance"]
@@ -118,6 +138,16 @@ def compare_offers(principal, offers):
 
 
 def eligible_amount(monthly_income, existing_emis, annual_rate, tenure_months, foir=0.5):
+    if monthly_income < 0:
+        raise IncomeValidationError("monthly_income cannot be negative")
+    if existing_emis < 0:
+        raise IncomeValidationError("existing_emis cannot be negative")
+    if annual_rate < 0:
+        raise RateValidationError("annual_rate cannot be negative")
+    if tenure_months <= 0:
+        raise TenureValidationError("tenure must be positive")
+    if not (0 <= foir <= 1):
+        raise IncomeValidationError("foir must be between 0 and 1")
     available = monthly_income * foir - existing_emis
     if available <= 0:
         return 0.0
