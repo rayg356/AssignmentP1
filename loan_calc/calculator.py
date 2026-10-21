@@ -41,9 +41,10 @@ def amortisation_schedule(principal, annual_rate, tenure_months):
         if month == tenure_months:
             principal_part = round(balance, 2)
             instalment_amt = round(principal_part + interest, 2)
+            balance = 0.0
         else:
             instalment_amt = instalment
-        balance = round(balance - principal_part, 2)
+            balance = round(balance - principal_part, 2)
         rows.append({
             "month": month,
             "emi": instalment_amt,
